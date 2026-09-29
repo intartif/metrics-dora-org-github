@@ -1,0 +1,35 @@
+# Mapeo de workflows que cuentan como "despliegue" (Deployment Frequency,
+# Change Failure Rate, Lead Time, MTTR) por tipo de repositorio.
+#
+# El tipo de repo se resuelve, en orden de prioridad, desde:
+#   1. La custom property de organización configurada (por defecto: "platform").
+#   2. Un mapeo manual nombre-de-repo -> tipo (ver repository_filter.RepoTypeResolver).
+#
+# Cada entrada admite el nombre del workflow (campo "name" en el YAML del
+# workflow) o el nombre de archivo (basename del "path", ej. "release-ios.yml").
+# La entrada "default" aplica a cualquier tipo de repo no listado explícitamente.
+
+ios:
+  deploy_workflows:
+    - release-ios.yml
+    - Release iOS
+
+android:
+  deploy_workflows:
+    - release-android.yml
+    - Release Android
+
+react:
+  deploy_workflows:
+    - publish-artifactory.yml
+    - Publish Artifactory
+
+monorepo:
+  deploy_workflows:
+    - release-ios.yml
+    - release-android.yml
+    - Release iOS
+    - Release Android
+
+default:
+  deploy_workflows: []

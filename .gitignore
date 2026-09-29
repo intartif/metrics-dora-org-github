@@ -1,0 +1,43 @@
+# Bytecode / cachés de Python
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Salidas y datos generados localmente (no se commitean)
+output/*.xlsx
+output/*.xls
+/e2e_output/
+*.xlsx
+!config/**/*.xlsx
+
+# Variables de entorno / secretos locales
+.env
+.env.*
+*.local
+
+# Editores / IDEs
+.vscode/
+.idea/
+*.swp
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Empaquetado Python
+*.egg-info/
+dist/
+build/

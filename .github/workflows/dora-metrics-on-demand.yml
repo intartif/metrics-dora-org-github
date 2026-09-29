@@ -1,0 +1,89 @@
+name: DORA Metrics (on demand)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_filter_type:
+        description: "Estrategia de filtrado de repositorios"
+        type: choice
+        required: true
+        options:
+          - name_pattern
+          - custom_property
+      repo_filter_value:
+        description: >-
+          Valor del filtro: regex del nombre de repo (name_pattern) o
+          'clave=valor' de custom property (custom_property).
+        type: string
+        required: true
+      week_start_date:
+        description: "Fecha de inicio de la semana a analizar (YYYY-MM-DD)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-inputs:
+    name: Validar inputs
+    runs-on: ubuntu-latest
+    outputs:
+      range_start: ${{ steps.validate.outputs.range_start }}
+      range_end: ${{ steps.validate.outputs.range_end }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validar reglas de fecha y filtro
+        id: validate
+        env:
+          REPO_FILTER_TYPE: ${{ inputs.repo_filter_type }}
+          REPO_FILTER_VALUE: ${{ inputs.repo_filter_value }}
+          WEEK_START_DATE: ${{ inputs.week_start_date }}
+        run: python scripts/validate_inputs.py
+
+  generate-metrics:
+    name: Generar métricas DORA
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    environment: dora-metrics
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Generar reporte de métricas DORA
+        env:
+          GH_ORG: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          REPO_FILTER_TYPE: ${{ inputs.repo_filter_type }}
+          REPO_FILTER_VALUE: ${{ inputs.repo_filter_value }}
+          WEEK_START_DATE: ${{ inputs.week_start_date }}
+          TRIGGERED_BY: ${{ github.actor }}
+          DEPLOY_MAPPING_PATH: config/deploy_workflows_mapping.yml
+          OUTPUT_DIR: output
+        run: python -m src.dora_metrics.main
+
+      - name: Subir Excel como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dora-metrics-report
+          path: output/*.xlsx
+          retention-days: 7
+          if-no-files-found: error
