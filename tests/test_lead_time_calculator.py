@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 
 from dora_metrics.lead_time_calculator import LeadTimeCalculator
-from dora_metrics.models import WorkflowRun
+from dora_metrics.models import PullRequestInfo, WorkflowRun
+from dora_metrics.pull_request_resolver import PullRequestResolver
 
 
 def _dt(iso: str) -> datetime:
@@ -24,7 +25,7 @@ class FakeGitHubClient:
         return
 
 
-def _deploy_run(sha="abc123", conclusion="success", is_deploy=True):
+def _deploy_run(sha="abc123", conclusion="success", is_deploy=True, pull_request=None):
     return WorkflowRun(
         repo="lib-ios-core",
         workflow_id=1,
@@ -43,10 +44,11 @@ def _deploy_run(sha="abc123", conclusion="success", is_deploy=True):
         updated_at=_dt("2024-03-18T10:11:00"),
         actor="jdoe",
         is_deploy=is_deploy,
+        pull_request=pull_request,
     )
 
 
-def test_calculate_for_deploy_runs_resolves_merged_pr():
+def test_calculate_for_deploy_runs_resolves_merged_pr_via_resolver():
     client = FakeGitHubClient(
         {
             "abc123": [
@@ -54,7 +56,8 @@ def test_calculate_for_deploy_runs_resolves_merged_pr():
             ]
         }
     )
-    calculator = LeadTimeCalculator(client, "my-org")
+    resolver = PullRequestResolver(client, "my-org")
+    calculator = LeadTimeCalculator(resolver)
 
     records = calculator.calculate_for_deploy_runs("lib-ios-core", [_deploy_run()])
 
@@ -64,9 +67,28 @@ def test_calculate_for_deploy_runs_resolves_merged_pr():
     assert record.lead_time_hours > 0
 
 
+def test_calculate_for_deploy_runs_reuses_precomputed_pull_request():
+    client = FakeGitHubClient({})
+    resolver = PullRequestResolver(client, "my-org")
+    calculator = LeadTimeCalculator(resolver)
+
+    precomputed_pr = PullRequestInfo(
+        number=7,
+        title="Release 1.0",
+        url="https://github.com/acme/lib-ios-core/pull/7",
+        merged_at=_dt("2024-03-17T08:00:00"),
+    )
+    run = _deploy_run(pull_request=precomputed_pr)
+
+    records = calculator.calculate_for_deploy_runs("lib-ios-core", [run])
+
+    assert records[0].pr_or_commit == "#7"
+
+
 def test_calculate_for_deploy_runs_skips_runs_without_merged_pr():
     client = FakeGitHubClient({"abc123": []})
-    calculator = LeadTimeCalculator(client, "my-org")
+    resolver = PullRequestResolver(client, "my-org")
+    calculator = LeadTimeCalculator(resolver)
 
     records = calculator.calculate_for_deploy_runs("lib-ios-core", [_deploy_run()])
 
@@ -75,7 +97,8 @@ def test_calculate_for_deploy_runs_skips_runs_without_merged_pr():
 
 def test_calculate_for_deploy_runs_skips_non_deploy_runs():
     client = FakeGitHubClient({"abc123": [{"number": 1, "merged_at": "2024-03-17T08:00:00Z"}]})
-    calculator = LeadTimeCalculator(client, "my-org")
+    resolver = PullRequestResolver(client, "my-org")
+    calculator = LeadTimeCalculator(resolver)
 
     records = calculator.calculate_for_deploy_runs(
         "lib-ios-core", [_deploy_run(is_deploy=False)]
@@ -86,7 +109,8 @@ def test_calculate_for_deploy_runs_skips_non_deploy_runs():
 
 def test_calculate_for_deploy_runs_skips_failed_runs():
     client = FakeGitHubClient({"abc123": [{"number": 1, "merged_at": "2024-03-17T08:00:00Z"}]})
-    calculator = LeadTimeCalculator(client, "my-org")
+    resolver = PullRequestResolver(client, "my-org")
+    calculator = LeadTimeCalculator(resolver)
 
     records = calculator.calculate_for_deploy_runs(
         "lib-ios-core", [_deploy_run(conclusion="failure")]
@@ -104,7 +128,8 @@ def test_calculate_for_deploy_runs_picks_latest_merged_pr():
             ]
         }
     )
-    calculator = LeadTimeCalculator(client, "my-org")
+    resolver = PullRequestResolver(client, "my-org")
+    calculator = LeadTimeCalculator(resolver)
 
     records = calculator.calculate_for_deploy_runs("lib-ios-core", [_deploy_run()])
 

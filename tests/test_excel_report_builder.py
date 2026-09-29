@@ -14,6 +14,7 @@ from dora_metrics.excel_report_builder import (
 from dora_metrics.models import (
     JobInfo,
     LeadTimeRecord,
+    PullRequestInfo,
     ReportData,
     ReportParameters,
     RepoSummary,
@@ -69,6 +70,12 @@ def _build_report_data() -> ReportData:
             updated_at=_dt("2024-03-18T10:11:00"),
             actor="jdoe",
             is_deploy=True,
+            pull_request=PullRequestInfo(
+                number=42,
+                title="Release 1.2.0",
+                url="https://github.com/acme/lib-ios-core/pull/42",
+                merged_at=_dt("2024-03-17T08:00:00"),
+            ),
         )
     ]
     jobs = [
@@ -83,6 +90,7 @@ def _build_report_data() -> ReportData:
             created_at=_dt("2024-03-18T10:00:00"),
             started_at=_dt("2024-03-18T10:01:00"),
             completed_at=_dt("2024-03-18T10:05:00"),
+            pull_request_number=42,
         )
     ]
     lead_time_records = [
@@ -192,3 +200,33 @@ def test_jobs_sheet_includes_raw_jobs_and_runner_usage_summary(tmp_path):
     all_values = [cell.value for row in sheet.iter_rows() for cell in row]
     assert "build" in all_values
     assert "Resumen de uso de runners" in all_values
+
+
+def test_runs_sheet_includes_pull_request_columns(tmp_path):
+    output_path = tmp_path / "report.xlsx"
+    builder = ExcelReportBuilder()
+    result_path = builder.build(_build_report_data(), output_path)
+
+    workbook = openpyxl.load_workbook(result_path)
+    sheet = workbook[SHEET_RUNS]
+    header = [cell.value for cell in sheet[1]]
+    assert "PR" in header
+    assert "PR URL" in header
+
+    data_row = dict(zip(header, [cell.value for cell in sheet[2]]))
+    assert data_row["PR"] == "#42"
+    assert data_row["PR URL"] == "https://github.com/acme/lib-ios-core/pull/42"
+
+
+def test_jobs_sheet_includes_pull_request_column(tmp_path):
+    output_path = tmp_path / "report.xlsx"
+    builder = ExcelReportBuilder()
+    result_path = builder.build(_build_report_data(), output_path)
+
+    workbook = openpyxl.load_workbook(result_path)
+    sheet = workbook[SHEET_JOBS]
+    header = [cell.value for cell in sheet[1]]
+    assert "PR" in header
+
+    data_row = dict(zip(header, [cell.value for cell in sheet[2]]))
+    assert data_row["PR"] == "#42"

@@ -127,6 +127,8 @@ class ExcelReportBuilder:
                     "Duracion (s)": _format_seconds(duration_seconds),
                     "Semana ISO": iso_week,
                     "Es despliegue": run.is_deploy,
+                    "PR": f"#{run.pull_request.number}" if run.pull_request else "",
+                    "PR URL": run.pull_request.url if run.pull_request else "",
                 }
             )
         columns = [
@@ -144,6 +146,8 @@ class ExcelReportBuilder:
             "Duracion (s)",
             "Semana ISO",
             "Es despliegue",
+            "PR",
+            "PR URL",
         ]
         pd.DataFrame(rows, columns=columns).to_excel(writer, sheet_name=SHEET_RUNS, index=False)
 
@@ -152,6 +156,7 @@ class ExcelReportBuilder:
             {
                 "Repo": job.repo,
                 "Run ID": job.run_id,
+                "PR": f"#{job.pull_request_number}" if job.pull_request_number else "",
                 "Job": job.name,
                 "Runner-labels": ",".join(job.labels) if job.labels else (job.runner_name or ""),
                 "Hosted/Self-hosted": "self-hosted" if job.is_self_hosted else "github-hosted",
@@ -166,6 +171,7 @@ class ExcelReportBuilder:
         job_columns = [
             "Repo",
             "Run ID",
+            "PR",
             "Job",
             "Runner-labels",
             "Hosted/Self-hosted",

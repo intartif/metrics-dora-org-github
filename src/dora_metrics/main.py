@@ -22,6 +22,7 @@ from .jobs_collector import JobsCollector
 from .lead_time_calculator import LeadTimeCalculator
 from .metrics_aggregator import MetricsAggregator
 from .models import ReportData, ReportParameters, RepoSummary
+from .pull_request_resolver import PullRequestResolver
 from .repository_filter import RepoTypeResolver, build_repo_filter_strategy
 from .workflow_runs_collector import WorkflowRunsCollector
 
@@ -55,7 +56,8 @@ def run(config: RunConfig) -> Path:
 
     runs_collector = WorkflowRunsCollector(client, config.org)
     jobs_collector = JobsCollector(client, config.org)
-    lead_time_calculator = LeadTimeCalculator(client, config.org)
+    pull_request_resolver = PullRequestResolver(client, config.org)
+    lead_time_calculator = LeadTimeCalculator(pull_request_resolver)
     aggregator = MetricsAggregator()
 
     all_runs = []
@@ -79,13 +81,18 @@ def run(config: RunConfig) -> Path:
                 is_deploy=deploy_classifier.is_deploy_workflow(
                     repo.repo_type, run.workflow_name, run.workflow_path
                 ),
+                pull_request=pull_request_resolver.resolve_for_sha(repo.name, run.head_sha),
             )
             for run in raw_runs
         ]
         all_runs.extend(classified_runs)
 
         for run in classified_runs:
-            all_jobs.extend(jobs_collector.list_jobs_for_run(repo.name, run.run_id))
+            pr_number = run.pull_request.number if run.pull_request else None
+            jobs_for_run = jobs_collector.list_jobs_for_run(repo.name, run.run_id)
+            all_jobs.extend(
+                replace(job, pull_request_number=pr_number) for job in jobs_for_run
+            )
 
         deploy_runs = [run for run in classified_runs if run.is_deploy]
         all_lead_time_records.extend(

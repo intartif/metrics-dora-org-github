@@ -34,6 +34,16 @@ class WorkflowInfo:
 
 
 @dataclass(frozen=True)
+class PullRequestInfo:
+    """Pull Request asociado al commit (`head_sha`) de un workflow run."""
+
+    number: int
+    title: str
+    url: str
+    merged_at: datetime | None
+
+
+@dataclass(frozen=True)
 class WorkflowRun:
     """Un `workflow run` de GitHub Actions, dentro del rango analizado."""
 
@@ -54,6 +64,7 @@ class WorkflowRun:
     updated_at: datetime | None
     actor: str
     is_deploy: bool = False
+    pull_request: PullRequestInfo | None = None
 
     @property
     def completed_at(self) -> datetime | None:
@@ -92,6 +103,7 @@ class JobInfo:
     created_at: datetime | None
     started_at: datetime | None
     completed_at: datetime | None
+    pull_request_number: int | None = None
 
     @property
     def is_self_hosted(self) -> bool:

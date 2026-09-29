@@ -17,8 +17,9 @@ src/dora_metrics/
 ├── repository_filter.py       # Strategy pattern: RepoFilterStrategy (ABC) + NamePatternFilter / CustomPropertyFilter (OCP/LSP).
 ├── workflow_runs_collector.py # GET .../actions/workflows y .../actions/runs (paginado).
 ├── jobs_collector.py           # GET .../actions/runs/{id}/jobs (paginado).
+├── pull_request_resolver.py   # PR asociado a un commit (commits/{sha}/pulls), cacheado por repo+sha.
 ├── deploy_classifier.py       # ¿Es un run de despliegue? según config/deploy_workflows_mapping.yml, por tipo de repo.
-├── lead_time_calculator.py    # PR mergeado (commits/{sha}/pulls) -> deploy exitoso.
+├── lead_time_calculator.py    # merged_at (via pull_request_resolver) -> deploy exitoso.
 ├── metrics_aggregator.py      # Cálculo puro (mediana/p90/tasas). CERO llamadas HTTP.
 ├── excel_report_builder.py    # Construye el .xlsx (pandas + openpyxl). CERO conocimiento de la API de GitHub.
 └── main.py                     # Composition root: instancia GitHubClient, estrategia de filtro, colectores, agregador y builder; orquesta el flujo.
@@ -30,9 +31,14 @@ src/dora_metrics/
   de Excel. `metrics_aggregator.py` y `excel_report_builder.py` no deben
   importar `github_client.py` ni `requests`.
 - Los colectores (`workflow_runs_collector.py`, `jobs_collector.py`,
-  `lead_time_calculator.py`, `repository_filter.py`) dependen de
-  `GitHubClientProtocol` (no de la clase concreta `GitHubClient`), para
-  poder mockearlos en tests sin HTTP real.
+  `pull_request_resolver.py`, `lead_time_calculator.py`, `repository_filter.py`)
+  dependen de `GitHubClientProtocol` (no de la clase concreta `GitHubClient`),
+  para poder mockearlos en tests sin HTTP real.
+- Todo `WorkflowRun` se relaciona con su Pull Request de origen a través de
+  `PullRequestResolver.resolve_for_sha()` (cacheado por `(repo, sha)` para
+  no duplicar llamadas entre runs y sus jobs); `lead_time_calculator.py`
+  reutiliza ese mismo resolver/resultado en vez de llamar de nuevo a
+  `commits/{sha}/pulls`. No dupliques esta lógica en otro módulo.
 - Cualquier nueva estrategia de filtrado de repos debe heredar de
   `RepoFilterStrategy` e implementar `list_repositories()`; regístrala en
   `build_repo_filter_strategy()` sin modificar el resto del pipeline (OCP).
@@ -65,10 +71,10 @@ src/dora_metrics/
    detectados | Fecha última ejecución
 3. `3. Ejecuciones (Workflow Runs)` — Repo | Workflow | Run ID | Evento |
    Rama | SHA | Estado | Conclusión | Creado | Iniciado | Finalizado |
-   Duración | Semana ISO
-4. `4. Runners - Jobs` — detalle de jobs + runners, y a continuación un
-   resumen agregado (mediana/p90 de tiempo en cola y ejecución) por
-   repo+runner
+   Duración | Semana ISO | Es despliegue | PR | PR URL
+4. `4. Runners - Jobs` — detalle de jobs + runners (incluye columna PR), y a
+   continuación un resumen agregado (mediana/p90 de tiempo en cola y
+   ejecución) por repo+runner
 5. `5. Lead Time detalle` — Repo | PR/Commit | Merged at | Run deploy |
    Deploy completado | Lead time (h)
 6. `6. Parametros` — filtro usado, rango de fechas, fecha de generación,

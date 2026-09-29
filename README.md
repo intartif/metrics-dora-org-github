@@ -21,8 +21,9 @@ src/dora_metrics/
 ├── repository_filter.py       # Strategy: NamePatternFilter / CustomPropertyFilter
 ├── workflow_runs_collector.py # Workflows + Runs por repo y rango de fechas
 ├── jobs_collector.py           # Jobs/runners por run
+├── pull_request_resolver.py   # PR asociado a un commit/run (con cache por repo+sha)
 ├── deploy_classifier.py       # ¿Es un run de despliegue? (config editable)
-├── lead_time_calculator.py    # PR mergeado -> deploy exitoso
+├── lead_time_calculator.py    # PR mergeado -> deploy exitoso (usa pull_request_resolver)
 ├── metrics_aggregator.py      # Cálculo puro de métricas DORA (sin HTTP)
 ├── excel_report_builder.py    # Construcción del .xlsx (sin conocer la API)
 └── main.py                     # Composition root (ensambla e inyecta todo)
@@ -32,6 +33,13 @@ Cada módulo tiene una sola responsabilidad (SRP) y depende de interfaces, no
 de implementaciones concretas (DIP vía `GitHubClientProtocol` y la clase
 abstracta `RepoFilterStrategy`, que permite añadir nuevas estrategias de
 filtrado sin tocar el resto del código — OCP/LSP).
+
+Todo `workflow run` (no solo los de despliegue) queda relacionado con su
+Pull Request de origen (número, título, URL y fecha de merge si aplica),
+resuelto una única vez por `PullRequestResolver` y propagado también a sus
+`jobs`. Esto permite, en el Excel, ver junto a cada ejecución y cada job qué
+PR la originó (hojas 3 y 4), además del detalle ya existente en la hoja 5
+para los despliegues exitosos.
 
 ## 1. Configurar el Environment y el secret `PAT_TOKEN`
 
